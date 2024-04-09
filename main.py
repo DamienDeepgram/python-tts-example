@@ -1,0 +1,121 @@
+import os
+import requests
+import pyaudio
+
+# Set this to False to download the audio before playing
+STREAM_AUDIO=True 
+MODEL_NAME = f"aura-asteria-en"
+CONTAINER= f"none"
+ENCODING = f"linear16"
+SAMPLE_RATE = 48000
+DEEPGRAM_URL = f"https://api.deepgram.com/v1/speak?model={MODEL_NAME}&encoding={ENCODING}&sample_rate={SAMPLE_RATE}&container={CONTAINER}"
+# Make sure to export DEEPGRAM_API_KEY=xxx with your own API key
+DG_API_KEY = os.getenv("DEEPGRAM_API_KEY")
+TEXT = f"Hello World!"
+
+headers = {
+    "Authorization": f"Token {DG_API_KEY}",
+    "Content-Type": "application/json"
+}
+payload = {
+    "text": TEXT
+}
+
+stream = None
+p = None
+
+# set this to your desired output device
+output_device_index = 2
+
+def init_stream():
+    global stream
+    global p
+
+    # Initialize PyAudio
+    p = pyaudio.PyAudio()
+
+    # List all audio devices
+    for i in range(p.get_device_count()):
+        dev = p.get_device_info_by_index(i)
+        print(f"Device {i}: {dev['name']} - Input Channels: {dev['maxInputChannels']} - Output Channels: {dev['maxOutputChannels']}")
+
+    # Open a stream to play the audio
+    stream = p.open(format=p.get_format_from_width(2),
+            channels=1,
+            rate=SAMPLE_RATE,
+            output=True,
+            output_device_index=output_device_index)
+    
+def close_stream():
+    global stream
+    global p
+
+    if stream is not None:
+        # Close the stream
+        stream.stop_stream()
+        stream.close()
+
+        # Terminate PyAudio
+        p.terminate()
+
+def download_and_play_audio():
+    response = requests.post(DEEPGRAM_URL, headers=headers, json=payload)
+    # print (f"Response: {response}")
+    if response.status_code == 200:
+        data = response.content
+        
+        base_directory = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(base_directory, f"audio.raw")
+        with open(file_path, "wb") as f:
+                f.write(data)
+        play_raw_audio(file_path)
+    else:
+        print("Error in TTS request:", response.status_code, response.text)
+
+def play_raw_audio(file_path):
+    global stream
+
+    # Open the raw file
+    with open(file_path, 'rb') as raw_file:
+        raw_data = raw_file.read()
+
+    # Open the stream
+    init_stream()
+
+    # Play the audio
+    stream.write(raw_data)
+
+    # Close Stream
+    close_stream()
+
+def play_streaming_audio():
+    global stream
+
+    # Open the stream
+    init_stream()
+    
+    # Stream the audio as you get it and play it
+    with requests.post(DEEPGRAM_URL, stream=True, headers=headers, json=payload) as r:
+        for chunk in r.iter_content(chunk_size=1024):
+            if chunk:
+                stream.write(chunk)
+    
+    # Close the stream
+    close_stream()
+
+def send_tts_request():
+    global stream
+
+    # play the audio while it is downloading
+    if STREAM_AUDIO: 
+        play_streaming_audio()
+
+    # Download the audio fully and then play it
+    else: 
+        download_and_play_audio()
+
+def main():
+    send_tts_request()
+
+if __name__ == "__main__":
+    main()
