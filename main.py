@@ -2,8 +2,7 @@ import os
 import requests
 import pyaudio
 
-# Set this to False to download the audio before playing
-STREAM_AUDIO=True 
+STREAM_AUDIO=True
 MODEL_NAME = f"aura-asteria-en"
 CONTAINER= f"none"
 ENCODING = f"linear16"
@@ -11,7 +10,7 @@ SAMPLE_RATE = 48000
 DEEPGRAM_URL = f"https://api.deepgram.com/v1/speak?model={MODEL_NAME}&encoding={ENCODING}&sample_rate={SAMPLE_RATE}&container={CONTAINER}"
 # Make sure to export DEEPGRAM_API_KEY=xxx with your own API key
 DG_API_KEY = os.getenv("DEEPGRAM_API_KEY")
-TEXT = f"Hello World!"
+TEXT = f"Hello World! This is a longer sentence"
 
 headers = {
     "Authorization": f"Token {DG_API_KEY}",
@@ -93,12 +92,26 @@ def play_streaming_audio():
 
     # Open the stream
     init_stream()
-    
+
+    buffer = bytearray()
+    min_buffer_size = 256 * 1024  # Minimum bytes to accumulate before playback
+    buffered = False
     # Stream the audio as you get it and play it
     with requests.post(DEEPGRAM_URL, stream=True, headers=headers, json=payload) as r:
         for chunk in r.iter_content(chunk_size=1024):
             if chunk:
-                stream.write(chunk)
+                if buffered:
+                    stream.write(chunk)
+                else:
+                    buffer.extend(chunk)
+                    if len(buffer) >= min_buffer_size:
+                        stream.write(bytes(buffer))
+                        buffer = bytearray()
+                        buffered = True
+
+    # After the loop ends, there might still be data left in the buffer that hasn't been played yet.
+    if buffer and not buffered:
+        stream.write(bytes(buffer))
     
     # Close the stream
     close_stream()
