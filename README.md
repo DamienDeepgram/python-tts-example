@@ -6,6 +6,12 @@
 pip install pyaudio
 ```
 
+## Setting your DEEPGRAM_API_KEY Env Var
+
+```
+export DEEPGRAM_API_KEY=xxx
+```
+
 ## Choosing your audio output devive
 
 The first time you run this code find the correct audio device that you want to send the audio to
